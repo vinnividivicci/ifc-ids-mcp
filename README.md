@@ -8,6 +8,10 @@ An MCP (Model Context Protocol) server that enables AI agents to deterministical
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+<a href="https://glama.ai/mcp/servers/@vinnividivicci/ifc-ids-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@vinnividivicci/ifc-ids-mcp/badge" alt="IDS Server MCP server" />
+</a>
+
 ## Features
 
 - ✅ **100% IDS 1.0 Compliant** - All exports validate against official XSD schema
