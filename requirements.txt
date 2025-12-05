@@ -1,3 +1,7 @@
 fastmcp>=0.4.0
 ifctester>=0.0.1
 pydantic>=2.0.0
+fastapi
+uvicorn
+google-generativeai
+mcp

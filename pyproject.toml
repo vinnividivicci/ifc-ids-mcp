@@ -25,9 +25,13 @@ classifiers = [
 ]
 
 dependencies = [
+    "fastapi>=0.123.5",
     "fastmcp>=0.4.0",
+    "google-generativeai>=0.8.5",
     "ifctester>=0.0.1",
+    "mcp>=1.20.0",
     "pydantic>=2.0.0",
+    "uvicorn>=0.38.0",
 ]
 
 [project.optional-dependencies]
@@ -86,4 +90,12 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "@abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
 ]
