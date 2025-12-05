@@ -110,106 +110,107 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=503, detail="MCP Client not initialized")
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        # 1. Get tools from MCP server
         try:
+            # 1. Get tools from MCP server
             mcp_tools = await mcp_client.list_tools()
+
+            # 2. Convert to Gemini tools
+            gemini_tools = [convert_mcp_tool_to_gemini(t) for t in mcp_tools]
+            
+            # 3. Initialize model with tools
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                tools=[Tool(function_declarations=gemini_tools)]
+            )
+            
+            # 4. Build history
+            history = []
+            for msg in request.messages[:-1]:
+                history.append({"role": "user" if msg.role == "user" else "model", "parts": [msg.content]})
+            
+            chat_session = model.start_chat(history=history)
+            
+            # 5. Send message and handle tool calls
+            user_message = request.messages[-1].content
+            
+            # Send thinking event
+            yield f"data: {json.dumps({'type': 'thinking', 'content': 'Processing your request...'})}\n\n"
+            
+            # We need a loop to handle multiple tool calls
+            response = chat_session.send_message(user_message)
+            
+            while True:
+                # Check if there are function calls
+                if not response.parts:
+                     break
+                
+                # Check for thinking/reasoning content
+                for part in response.parts:
+                    if hasattr(part, 'thought') and part.thought:
+                        yield f"data: {json.dumps({'type': 'thinking', 'content': part.thought})}\n\n"
+                     
+                part = response.parts[0]
+                if fn := part.function_call:
+                    # Execute tool
+                    tool_name = fn.name
+                    # Convert protobuf objects to JSON-serializable types
+                    def to_serializable(obj):
+                        if hasattr(obj, 'items'):  # dict-like
+                            return {k: to_serializable(v) for k, v in obj.items()}
+                        elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
+                            return [to_serializable(v) for v in obj]
+                        else:
+                            return obj
+                    tool_args = to_serializable(dict(fn.args))
+                    
+                    print(f"Executing tool: {tool_name} with args: {tool_args}")
+                    
+                    # Send tool use event with args
+                    yield f"data: {json.dumps({'type': 'tool_use', 'tool': tool_name, 'args': tool_args})}\n\n"
+                    
+                    try:
+                        tool_result = await mcp_client.call_tool(tool_name, tool_args)
+                        
+                        # Send tool result event
+                        yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'success': True})}\n\n"
+                        
+                        # Send result back to model
+                        response = chat_session.send_message(
+                            genai.protos.Content(
+                                parts=[genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=tool_name,
+                                        response={"result": tool_result}
+                                    )
+                                )]
+                            )
+                        )
+                    except Exception as e:
+                        # Send tool error event
+                        yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'success': False, 'error': str(e)})}\n\n"
+                        
+                        # Send error back to model
+                        response = chat_session.send_message(
+                            genai.protos.Content(
+                                parts=[genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=tool_name,
+                                        response={"error": str(e)}
+                                    )
+                                )]
+                            )
+                        )
+                else:
+                    # Text response, we are done
+                    break
+            
+            # Send final response
+            yield f"data: {json.dumps({'type': 'response', 'content': response.text})}\n\n"
+            yield "data: [DONE]\n\n"
+
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             return
-
-        # 2. Convert to Gemini tools
-        gemini_tools = [convert_mcp_tool_to_gemini(t) for t in mcp_tools]
-        
-        # 3. Initialize model with tools
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
-            tools=[Tool(function_declarations=gemini_tools)]
-        )
-        
-        # 4. Build history
-        history = []
-        for msg in request.messages[:-1]:
-            history.append({"role": "user" if msg.role == "user" else "model", "parts": [msg.content]})
-        
-        chat_session = model.start_chat(history=history)
-        
-        # 5. Send message and handle tool calls
-        user_message = request.messages[-1].content
-        
-        # Send thinking event
-        yield f"data: {json.dumps({'type': 'thinking', 'content': 'Processing your request...'})}\n\n"
-        
-        # We need a loop to handle multiple tool calls
-        response = chat_session.send_message(user_message)
-        
-        while True:
-            # Check if there are function calls
-            if not response.parts:
-                 break
-            
-            # Check for thinking/reasoning content
-            for part in response.parts:
-                if hasattr(part, 'thought') and part.thought:
-                    yield f"data: {json.dumps({'type': 'thinking', 'content': part.thought})}\n\n"
-                 
-            part = response.parts[0]
-            if fn := part.function_call:
-                # Execute tool
-                tool_name = fn.name
-                # Convert protobuf objects to JSON-serializable types
-                def to_serializable(obj):
-                    if hasattr(obj, 'items'):  # dict-like
-                        return {k: to_serializable(v) for k, v in obj.items()}
-                    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
-                        return [to_serializable(v) for v in obj]
-                    else:
-                        return obj
-                tool_args = to_serializable(dict(fn.args))
-                
-                print(f"Executing tool: {tool_name} with args: {tool_args}")
-                
-                # Send tool use event with args
-                yield f"data: {json.dumps({'type': 'tool_use', 'tool': tool_name, 'args': tool_args})}\n\n"
-                
-                try:
-                    tool_result = await mcp_client.call_tool(tool_name, tool_args)
-                    
-                    # Send tool result event
-                    yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'success': True})}\n\n"
-                    
-                    # Send result back to model
-                    response = chat_session.send_message(
-                        genai.protos.Content(
-                            parts=[genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
-                                    name=tool_name,
-                                    response={"result": tool_result}
-                                )
-                            )]
-                        )
-                    )
-                except Exception as e:
-                    # Send tool error event
-                    yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'success': False, 'error': str(e)})}\n\n"
-                    
-                    # Send error back to model
-                    response = chat_session.send_message(
-                        genai.protos.Content(
-                            parts=[genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
-                                    name=tool_name,
-                                    response={"error": str(e)}
-                                )
-                            )]
-                        )
-                    )
-            else:
-                # Text response, we are done
-                break
-        
-        # Send final response
-        yield f"data: {json.dumps({'type': 'response', 'content': response.text})}\n\n"
-        yield "data: [DONE]\n\n"
     
     return StreamingResponse(
         event_generator(),
