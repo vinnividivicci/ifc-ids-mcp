@@ -4,6 +4,8 @@
 
 An MCP (Model Context Protocol) server that enables AI agents to deterministically create, validate, and manage Information Delivery Specification (IDS) files that are fully compliant with the buildingSMART IDS 1.0 standard.
 
+[![ifc-ids-mcp MCP server](https://glama.ai/mcp/servers/vinnividivicci/ifc-ids-mcp/badges/card.svg)](https://glama.ai/mcp/servers/vinnividivicci/ifc-ids-mcp)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
