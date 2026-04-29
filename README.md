@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/vinnividivicci-ifc-ids-mcp-badge.png)](https://mseep.ai/app/vinnividivicci-ifc-ids-mcp)
+
 # IDS MCP Server
 
 **AI-powered creation of buildingSMART IDS files with 100% compliance**
